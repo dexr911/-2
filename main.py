@@ -2,7 +2,7 @@ import telebot
 import re
 
 # --- إعدادات البوت ---
-API_TOKEN = 'ضع_توكن_بوتك_هنا'
+API_TOKEN = '8567025218:AAFzOed48WmloFFzzOI7x-9JY2-YVHzdydc'
 # الشفرة المطلوبة لتفعيل اللوحة: -.. . -..- .-.
 SECRET_CODE = "-.. . -..- .-." 
 
