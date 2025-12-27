@@ -18,8 +18,8 @@ owner_add_mode = {}
 @bot.message_handler(commands=['start'])
 def start_command(message):
     markup = telebot.types.InlineKeyboardMarkup()
-    btn1 = telebot.types.InlineKeyboardButton("ملفات txt الشغالة فقط والقابلة للفحص", callback_data="show_txt")
-    btn2 = telebot.types.InlineKeyboardButton("ايميلات قابلة للفحص وشغالة فقط", callback_data="show_emails")
+    btn1 = telebot.types.InlineKeyboardButton("ملف ايميلات txt", callback_data="show_txt")
+    btn2 = telebot.types.InlineKeyboardButton("ايميلات فقط", callback_data="show_emails")
     markup.add(btn1)
     markup.add(btn2)
     bot.send_message(message.chat.id, "اختر أحد الخيارات التالية:", reply_markup=markup)
