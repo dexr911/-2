@@ -1,63 +1,69 @@
 import telebot
-import re
 
 # --- إعدادات البوت ---
 API_TOKEN = '8567025218:AAFzOed48WmloFFzzOI7x-9JY2-YVHzdydc'
-# الشفرة المطلوبة لتفعيل اللوحة: -.. . -..- .-.
+# الشفرة السرية: -.. . -..- .-.
 SECRET_CODE = "-.. . -..- .-." 
 
 bot = telebot.TeleBot(API_TOKEN)
-admin_status = {} # لتحديد إذا كان الشخص مفعل وضع الآدمن
 
-# --- لوحة تحكم الآدمن ---
+# مخازن البيانات (ستفقد عند إعادة تشغيل البوت، يفضل لاحقاً ربطها بقاعدة بيانات)
+stored_emails = []
+stored_files = []
+
+# حالة المالك لإضافة البيانات
+owner_add_mode = {}
+
+# --- عند إرسال /start تظهر الخيارات مباشرة ---
+@bot.message_handler(commands=['start'])
+def start_command(message):
+    markup = telebot.types.InlineKeyboardMarkup()
+    btn1 = telebot.types.InlineKeyboardButton("ملفات txt الشغالة فقط والقابلة للفحص", callback_data="show_txt")
+    btn2 = telebot.types.InlineKeyboardButton("ايميلات قابلة للفحص وشغالة فقط", callback_data="show_emails")
+    markup.add(btn1)
+    markup.add(btn2)
+    bot.send_message(message.chat.id, "اختر أحد الخيارات التالية:", reply_markup=markup)
+
+# --- التعامل مع الضغط على الخيارات ---
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data == "show_txt":
+        if stored_files:
+            for file_id in stored_files:
+                bot.send_document(call.message.chat.id, file_id)
+        else:
+            bot.answer_callback_query(call.id, "لا توجد ملفات حالياً.")
+            
+    elif call.data == "show_emails":
+        if stored_emails:
+            emails_text = "\n".join(stored_emails)
+            bot.send_message(call.message.chat.id, f"القائمة الشغالة:\n\n{emails_text}")
+        else:
+            bot.answer_callback_query(call.id, "لا توجد إيميلات حالياً.")
+
+# --- نظام الإضافة الخاص بالمالك عن طريق الشفرة ---
 @bot.message_handler(func=lambda m: m.text == SECRET_CODE)
-def unlock_admin(message):
-    admin_status[message.chat.id] = True
-    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("ارسال ملفات txt شغالة", "ارسال ايميلات شغالة")
-    markup.add("❌ إغلاق اللوحة")
-    bot.reply_to(message, "🔓 تم تفعيل قائمة التحكم الخاصة بك يا Dexr.", reply_markup=markup)
+def secret_access(message):
+    owner_add_mode[message.chat.id] = True
+    bot.reply_to(message, "🔓 وضع الإضافة مفعل. أرسل الآن الملفات أو الإيميلات وسأقوم بتصنيفها تلقائياً.")
 
-@bot.message_handler(func=lambda m: admin_status.get(m.chat.id) and m.text == "❌ إغلاق اللوحة")
-def lock_admin(message):
-    admin_status[message.chat.id] = False
-    bot.reply_to(message, "🔒 تم إخفاء الخيارات.", reply_markup=telebot.types.ReplyKeyboardRemove())
-
-# --- خيار ارسال ايميلات نصية ---
-@bot.message_handler(func=lambda m: admin_status.get(m.chat.id) and m.text == "ارسال ايميلات شغالة")
-def ask_for_emails(message):
-    bot.send_message(message.chat.id, "ارسل الإيميلات الشغالة الآن (نص مباشر):")
-
-# --- خيار ارسال ملفات TXT ---
-@bot.message_handler(func=lambda m: admin_status.get(m.chat.id) and m.text == "ارسال ملفات txt شغالة")
-def ask_for_file(message):
-    bot.send_message(message.chat.id, "يرجى رفع ملف الـ txt الذي يحتوي على الإيميلات:")
-
-# --- استقبال ومعالجة البيانات ---
+# --- استقبال الإضافات وتصنيفها ---
 @bot.message_handler(content_types=['document', 'text'])
-def handle_data(message):
-    # التأكد أن الشخص آدمن وفعل الشفرة
-    if not admin_status.get(message.chat.id):
+def collect_data(message):
+    if not owner_add_mode.get(message.chat.id):
         return
 
-    emails = []
-    
-    # إذا أرسل ملف
+    # إذا كان المرسل ملف TXT
     if message.document and message.document.file_name.endswith('.txt'):
-        file_info = bot.get_file(message.document.file_id)
-        downloaded = bot.download_file(file_info.file_path)
-        emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', downloaded.decode('utf-8'))
-        source_type = "ملف TXT"
-    
-    # إذا أرسل نص مباشر (وليس من أزرار اللوحة)
-    elif message.text and not message.text.startswith(("-", "ارسال", "❌")):
-        emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', message.text)
-        source_type = "قائمة نصية"
+        stored_files.append(message.document.file_id)
+        bot.reply_to(message, "✅ تم حفظ الملف في قسم (ملفات txt).")
 
-    if emails:
-        # هنا البوت فقط يستلمها منك ويؤكد لك العدد
-        bot.reply_to(message, f"📥 تم استلام {len(emails)} إيميل شغال من ({source_type}).\nسيتم حفظها ومعالجتها وفقاً لطلبك.")
-    elif not message.text.startswith(("-", "ارسال", "❌")):
-        bot.reply_to(message, "⚠️ لم يتم العثور على إيميلات في إرسالك.")
+    # إذا كان المرسل نص (إيميلات)
+    elif message.text and not message.text.startswith(("/", "-")):
+        import re
+        found_emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', message.text)
+        if found_emails:
+            stored_emails.extend(found_emails)
+            bot.reply_to(message, f"✅ تم حفظ {len(found_emails)} إيميل في قسم (الإيميلات).")
 
 bot.polling()
